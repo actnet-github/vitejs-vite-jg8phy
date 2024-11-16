@@ -251,7 +251,7 @@ export const login = async (loginId: string, password: string): Promise<void> =>
         const data = JSON.parse(responseText);
         
         if (!response.ok) {
-          const errorMessage = data.error?.message || data.errors?.[0]?.message || `ログインに失敗しました。Status: ${response.status}`;
+          const errorMessage = data.error?.message || data.errors?.[0]?.message || `ログインに失敗しました。。Status: ${response.status}`;
           throw new Error(errorMessage);
         }
 
