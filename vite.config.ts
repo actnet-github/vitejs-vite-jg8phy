@@ -14,20 +14,28 @@ export default defineConfig({
       '/rcms-api': {
         target: 'https://qiss-nwes.g.kuroco.app',
         changeOrigin: true,
-        secure: true,
+        secure: false,
         credentials: true,
+        rewrite: (path) => path.replace(/^\/rcms-api/, '/rcms-api'),
         configure: (proxy, options) => {
-          // プロキシインスタンスの設定をカスタマイズ
+          proxy.on('error', (err, req, res) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('Sending Request to the Target:', proxyReq.method, proxyReq.path);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode);
+          });
         },
         headers: {
           // プロキシリクエストに追加するヘッダー
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Credentials': 'true',
         },
-      },
-    },
-  },
-  cors: {
+      }
+    }
+    cors: {
     origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

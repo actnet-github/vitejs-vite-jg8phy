@@ -1,5 +1,11 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/rcms-api/1';
 
+interface LoginRequest {
+  email: string;
+  password: string;
+  login_save: number;  // 固定で0
+}
+
 interface ApiError {
   code: string;
   message: string;
@@ -197,49 +203,73 @@ export const getHeaders = (): Headers => {
 };
 
 // ログイン関数の修正
-export const login = async (
-  loginId: string,
-  password: string
-): Promise<void> => {
+export const login = async (loginId: string, password: string): Promise<void> => {
   const url = `${API_BASE_URL}/login`;
-  console.log('url:', url);
+  console.log('Sending login request to:', url);
 
   try {
-    const response = await fetch(url, {
+    const loginData: LoginRequest = {
+      email: loginId,
+      password: password,
+      login_save: 0  // 自動ログインは使用しない
+    };
+
+    const requestOptions = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'x-rcms-api-access-token': '',
+        'Accept': 'application/json',
       },
-      credentials: 'include',
-      body: JSON.stringify({
-        email: loginId,
-        password: password,
-      }),
+      credentials: 'include' as const,
+      body: JSON.stringify(loginData),
+    };
+
+    // リクエストの詳細をログ出力（パスワードは除く）
+    console.log('Login request:', {
+      url,
+      method: requestOptions.method,
+      headers: requestOptions.headers,
+      body: { email: loginId }
     });
 
-    if (!response.ok) {
-      throw new Error(`ログインに失敗しました。Status: ${response.status}`);
+    const response = await fetch(url, requestOptions);
+
+    // レスポンスヘッダーとステータスをログ出力
+    console.log('Login response status:', response.status);
+    console.log('Login response headers:', Object.fromEntries(response.headers.entries()));
+
+    const responseText = await response.text();
+    console.log('Raw response:', responseText);
+
+    let data: any;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse response:', e);
+      throw new Error('サーバーからの応答を解析できませんでした');
     }
 
-    const data: LoginResponse = await response.json();
-
-    if (data.errors?.length) {
-      throw new Error(`ログインエラー: ${data.errors[0].message}`);
+    // エラーレスポンスの処理
+    if (!response.ok) {
+      if (data.errors?.length) {
+        throw new Error(`ログインエラー: ${data.errors[0].message}`);
+      }
+      throw new Error(`ログインに失敗しました。Status: ${response.status}`);
     }
 
     if (!data.grant_token) {
       throw new Error('認証トークンが見つかりません');
     }
 
-    const expiresSeconds = data.info.validUntil - Math.floor(Date.now() / 1000);
-    TokenManager.saveToken(data.grant_token, expiresSeconds);
+    const expiresSeconds = data.info?.validUntil 
+      ? data.info.validUntil - Math.floor(Date.now() / 1000)
+      : 24 * 60 * 60; // 24時間
 
-    // 認証状態の変更を通知
-    notifyAuthStateChange();
+    TokenManager.saveToken(data.grant_token, expiresSeconds);
+    console.log('Login successful, token saved');
+
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Login process failed:', error);
     throw error;
   }
 };
