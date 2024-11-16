@@ -202,6 +202,7 @@ export const login = async (
   password: string
 ): Promise<void> => {
   const url = `${API_BASE_URL}/login`;
+  console.log('url:', url);
 
   try {
     const response = await fetch(url, {
