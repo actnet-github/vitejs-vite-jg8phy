@@ -1,4 +1,3 @@
-// vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -17,21 +16,32 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/rcms-api/, '/rcms-api'),
+        headers: {
+          'Origin': 'https://qiss-nwes.g.kuroco.app',
+          'Referer': 'https://qiss-nwes.g.kuroco.app'
+        },
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
             console.log('proxy error', err);
           });
           proxy.on('proxyReq', (proxyReq, req, res) => {
-            console.log('Sending Request to the Target:', proxyReq.method, proxyReq.path);
+            console.log('Sending Request to the Target:', {
+              method: proxyReq.method,
+              path: proxyReq.path,
+              headers: proxyReq.getHeaders()
+            });
           });
           proxy.on('proxyRes', (proxyRes, req, res) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode);
+            console.log('Received Response from the Target:', {
+              statusCode: proxyRes.statusCode,
+              headers: proxyRes.headers
+            });
           });
         },
       }
-    },  // カンマを追加
+    },
     cors: {
-      origin: true,
+      origin: 'https://qiss-nwes.g.kuroco.app',
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: [
@@ -40,6 +50,8 @@ export default defineConfig({
         'X-Requested-With',
         'x-rcms-api-access-token',
         'X-Request-ID',
+        'Origin',
+        'Accept',
       ],
     }
   }

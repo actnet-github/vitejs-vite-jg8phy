@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/rcms-api/1';
+const API_URL = 'https://qiss-nwes.g.kuroco.app';
+const API_BASE_URL = `${API_URL}/rcms-api/1`;
 
 interface LoginRequest {
   email: string;
@@ -211,16 +212,17 @@ export const login = async (loginId: string, password: string): Promise<void> =>
     const loginData: LoginRequest = {
       email: loginId,
       password: password,
-      login_save: 0  // 自動ログインは使用しない
+      login_save: 0
     };
 
-    const requestOptions = {
+    const requestOptions: RequestInit = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        'Accept': '*/*',  // Swaggerの設定に合わせる
       },
-      credentials: 'include' as const,
+      credentials: 'include',
+      mode: 'cors',      // CORSモードを明示的に指定
       body: JSON.stringify(loginData),
     };
 
@@ -229,44 +231,45 @@ export const login = async (loginId: string, password: string): Promise<void> =>
       url,
       method: requestOptions.method,
       headers: requestOptions.headers,
-      body: { email: loginId }
+      body: { email: loginId, login_save: 0 }
     });
 
     const response = await fetch(url, requestOptions);
 
-    // レスポンスヘッダーとステータスをログ出力
-    console.log('Login response status:', response.status);
-    console.log('Login response headers:', Object.fromEntries(response.headers.entries()));
+    // レスポンスの詳細をログ出力
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     const responseText = await response.text();
     console.log('Raw response:', responseText);
 
-    let data: any;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      console.error('Failed to parse response:', e);
-      throw new Error('サーバーからの応答を解析できませんでした');
-    }
+    // 空のレスポンスでなければJSONとしてパース
+    if (responseText) {
+      try {
+        const data = JSON.parse(responseText);
+        
+        if (!response.ok) {
+          const errorMessage = data.error?.message || data.errors?.[0]?.message || `ログインに失敗しました。Status: ${response.status}`;
+          throw new Error(errorMessage);
+        }
 
-    // エラーレスポンスの処理
-    if (!response.ok) {
-      if (data.errors?.length) {
-        throw new Error(`ログインエラー: ${data.errors[0].message}`);
+        if (data.grant_token) {
+          const expiresSeconds = data.info?.validUntil 
+            ? data.info.validUntil - Math.floor(Date.now() / 1000)
+            : 24 * 60 * 60;
+
+          TokenManager.saveToken(data.grant_token, expiresSeconds);
+          console.log('Login successful, token saved');
+          return;
+        }
+      } catch (e) {
+        console.error('Error parsing response:', e);
+        throw new Error('サーバーからの応答を解析できませんでした');
       }
-      throw new Error(`ログインに失敗しました。Status: ${response.status}`);
     }
 
-    if (!data.grant_token) {
-      throw new Error('認証トークンが見つかりません');
-    }
-
-    const expiresSeconds = data.info?.validUntil 
-      ? data.info.validUntil - Math.floor(Date.now() / 1000)
-      : 24 * 60 * 60; // 24時間
-
-    TokenManager.saveToken(data.grant_token, expiresSeconds);
-    console.log('Login successful, token saved');
+    // 成功レスポンスが期待した形式でない場合
+    throw new Error('Invalid response format from server');
 
   } catch (error) {
     console.error('Login process failed:', error);
