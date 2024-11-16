@@ -394,29 +394,150 @@ const handleResponse = async <T>(response: Response): Promise<T> => {
   }
 };
 
-export const deleteNews = async (id: number) => {
-  const response = await fetch(`${API_BASE_URL}/content/delete/${id}`, {
-    method: 'POST',
-    headers: getHeaders(),
-    credentials: 'include',
-  });
-  return handleResponse(response);
+interface NewsDetailsResponse {
+  details: {
+    topics_id: number;
+    subject: string;
+    contents: string;
+    ymd: string;
+    contents_type: number;
+    open_date: string;
+    close_date?: string;
+    topics_flg: number;
+    open_flg: number;
+    m_site_id: {
+      key?: string;
+      label?: string;
+    };
+  };
+  errors: any[];
+  messages: any[];
+}
+
+export const getNewsDetails = async (id: number): Promise<NewsDetailsResponse> => {
+  try {
+    console.log('Fetching news details for ID:', id);
+    const headers = getHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/content/details/${id}`, {
+      method: 'GET',
+      headers: headers,
+      credentials: 'include',
+    });
+
+    const responseText = await response.text();
+    console.log('Response body:', responseText);
+
+    if (!response.ok) {
+      throw new Error(`ニュース詳細の取得に失敗しました。Status: ${response.status}`);
+    }
+
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error('Error fetching news details:', error);
+    throw error;
+  }
 };
 
-export const getNewsDetails = async (id: number) => {
-  const response = await fetch(`${API_BASE_URL}/content/details/${id}`, {
-    headers: getHeaders(),
-    credentials: 'include',
-  });
-  return handleResponse(response);
+interface NewsUpdateRequest {
+  subject: string;
+  contents: string;
+  open_date: string;
+  close_date?: string;
+  m_site_id?: string;
+  validate_only: boolean;
+  approvalflow_id: number;
+}
+
+interface ApiResponse {
+  errors: Array<{ message: string; code: string; }>;
+  messages: string[];
+}
+
+// ニュース更新の修正
+export const updateNews = async (id: number, formData: NewsUpdateRequest): Promise<void> => {
+  try {
+    console.log('Updating news:', { id, formData });
+
+    const requestData: NewsUpdateRequest = {
+      subject: formData.subject,
+      contents: formData.contents,
+      open_date: formData.open_date,
+      close_date: formData.close_date,
+      m_site_id: formData.m_site_id || '',
+      validate_only: false,
+      approvalflow_id: 0
+    };
+
+    const response = await fetch(`${API_BASE_URL}/content/update/${id}`, {
+      method: 'POST',
+      headers: {
+        ...getHeaders(),
+        'Accept': '*/*',
+      },
+      credentials: 'include',
+      body: JSON.stringify(requestData),
+    });
+
+    const responseText = await response.text();
+    console.log('Update response:', responseText);
+
+    if (!response.ok) {
+      const errorResponse = responseText ? JSON.parse(responseText) : null;
+      throw new Error(
+        errorResponse?.errors?.[0]?.message || 
+        `ニュースの更新に失敗しました。Status: ${response.status}`
+      );
+    }
+
+    const responseData: ApiResponse = JSON.parse(responseText);
+    console.log('Update successful:', responseData.messages[0]);
+
+  } catch (error) {
+    console.error('Error updating news:', error);
+    throw error;
+  }
 };
 
-export const updateNews = async (id: number, data: NewsContent) => {
-  const response = await fetch(`${API_BASE_URL}/content/update/${id}`, {
-    method: 'POST',
-    headers: getHeaders(),
-    credentials: 'include',
-    body: JSON.stringify(data),
-  });
-  return handleResponse(response);
+// ニュース削除の修正
+export const deleteNews = async (id: number): Promise<void> => {
+  try {
+    console.log('Deleting news:', id);
+
+    const response = await fetch(`${API_BASE_URL}/delete/${id}`, { // pathを修正
+      method: 'POST',
+      headers: {
+        ...getHeaders(),
+        'Accept': '*/*',
+      },
+      credentials: 'include',
+      body: JSON.stringify({}) // 空のJSONオブジェクトを送信
+    });
+
+    const responseText = await response.text();
+    console.log('Delete response:', responseText);
+
+    if (!response.ok) {
+      const errorResponse = responseText ? JSON.parse(responseText) : null;
+      throw new Error(
+        errorResponse?.errors?.[0]?.message || 
+        `ニュースの削除に失敗しました。Status: ${response.status}`
+      );
+    }
+
+    const responseData: ApiResponse = JSON.parse(responseText);
+    console.log('Delete successful:', responseData.messages[0]);
+
+  } catch (error) {
+    console.error('Error deleting news:', error);
+    // エラーの詳細をログ出力
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
+    throw error;
+  }
 };

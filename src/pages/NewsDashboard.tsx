@@ -84,7 +84,7 @@ export default function NewsDashboard() {
 
   const handleDeleteConfirm = async () => {
     if (!selectedNews) return;
-
+  
     try {
       await deleteNews(selectedNews.id);
       setNews(news.filter(item => item.id !== selectedNews.id));
@@ -96,7 +96,7 @@ export default function NewsDashboard() {
          (err.message.includes('Unauthorized') || err.message.includes('認証'))) {
         setIsAuthDialogOpen(true);
       } else {
-        setError('ニュースの削除に失敗しました。');
+        setError(err instanceof Error ? err.message : 'ニュースの削除に失敗しました');
       }
     }
   };

@@ -4,6 +4,7 @@ import NewsDashboard from './pages/NewsDashboard';
 import NewsCreatePage from './pages/NewsCreatePage';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
+import NewsEdit from './pages/NewsEdit';
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             }
           />
           <Route path="/" element={<Navigate to="/news" replace />} />
+          <Route path="/news/edit/:id" element={<NewsEdit />} />
         </Routes>
       </Router>
     </AuthProvider>
