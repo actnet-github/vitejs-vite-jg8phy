@@ -3,12 +3,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { TokenManager } from '../lib/auth';
 
 export const useAuthStatus = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => TokenManager.isTokenValid());
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    const isValid = TokenManager.isTokenValid();
+    console.log('Initial auth check:', isValid);
+    return isValid;
+  });
 
   const checkAuth = useCallback(() => {
     const isValid = TokenManager.isTokenValid();
+    console.log('Auth status check:', isValid);
     setIsAuthenticated(isValid);
-    return isValid;
   }, []);
 
   useEffect(() => {
@@ -18,23 +22,15 @@ export const useAuthStatus = () => {
     // トークンの有効期限をチェックする間隔（ミリ秒）
     const interval = setInterval(checkAuth, 60000); // 1分ごとにチェック
 
-    // イベントリスナーの設定
-    const handleStorageChange = () => {
-      checkAuth();
-    };
-
-    // localStorage の変更を監視
-    window.addEventListener('storage', handleStorageChange);
-
     // カスタムイベントの定義と監視
     const handleAuthChange = () => {
+      console.log('Auth state change detected');
       checkAuth();
     };
     window.addEventListener('authStateChanged', handleAuthChange);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('authStateChanged', handleAuthChange);
     };
   }, [checkAuth]);

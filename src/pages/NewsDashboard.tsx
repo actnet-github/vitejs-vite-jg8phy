@@ -1,33 +1,4 @@
-// types/news.ts
-interface NewsResponse {
-  list: {
-    topics_id: number;
-    subject: string;
-    contents: string;
-    open_date: string;
-    close_date?: string;
-    created: string;
-    updated: string;
-  }[];
-  pageInfo: {
-    totalCnt: number;
-    perPage: number;
-    currentPage: number;
-    totalPage: number;
-  };
-}
-
-interface NewsItem {
-  id: number;
-  title: string;
-  content: string;
-  publishDate: string;
-  endDate?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// NewsDashboard.tsx
+// src/pages/NewsDashboard.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NewsCard } from '../components/NewsCard';
@@ -40,14 +11,23 @@ import { AuthExpiredDialog } from '../components/AuthExpiredDialog';
 import { useAuthStatus } from '../hooks';
 import { TokenManager } from '../lib/auth';
 import { Header } from '../components/Header';
+import { NewsApiResponse, NewsItem } from '../types/news';
+
+// データ変換関数
+const transformNewsData = (response: NewsApiResponse): NewsItem[] => {
+  return response.list.map(item => ({
+    id: item.topics_id,
+    title: item.subject,
+    content: item.contents,
+    publishDate: item.open_date,
+    endDate: item.close_date,
+    createdAt: item.inst_ymdhi,
+    updatedAt: item.update_ymdhi,
+    siteInfo: item.m_site_id
+  }));
+};
 
 export default function NewsDashboard() {
-  const isAuthenticated = useAuthStatus();
-
-  useEffect(() => {
-    console.log('Authentication status:', isAuthenticated);
-    console.log('Current token:', TokenManager.getToken());
-  }, [isAuthenticated]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,24 +36,21 @@ export default function NewsDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+  const isAuthenticated = useAuthStatus();
 
   useEffect(() => {
-    // 認証状態をチェック
-    if (!isAuthenticated) {
-      console.error(isAuthenticated);
-      setIsAuthDialogOpen(false);
-      return;
-    }
-
     const fetchNews = async () => {
       try {
         setIsLoading(true);
         const response = await getNewsList();
+        console.log('API Response:', response); // デバッグ用
+
         const transformedNews = transformNewsData(response);
-        console.log('log1', response);
-        console.log('log2', transformedNews);
+        console.log('Transformed news:', transformedNews); // デバッグ用
+        
         setNews(transformedNews);
       } catch (error) {
+        console.error('Error fetching news:', error);
         if (error instanceof Error) {
           if (error.message === '認証が必要です') {
             setIsAuthDialogOpen(true);
@@ -86,16 +63,12 @@ export default function NewsDashboard() {
       }
     };
 
-    fetchNews();
+    if (isAuthenticated) {
+      fetchNews();
+    }
   }, [isAuthenticated]);
 
-  const handleAuthDialogClose = () => {
-    setIsAuthDialogOpen(false);
-    TokenManager.clearToken(); // トークンをクリア
-    navigate('/login', { replace: true });
-  };
-
-  const filteredNews = news.filter((item) =>
+  const filteredNews = news.filter(item =>
     item.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -114,15 +87,13 @@ export default function NewsDashboard() {
 
     try {
       await deleteNews(selectedNews.id);
-      setNews(news.filter((item) => item.id !== selectedNews.id));
+      setNews(news.filter(item => item.id !== selectedNews.id));
       setSelectedNews(null);
       setIsDeleteDialogOpen(false);
     } catch (err) {
       console.error('Error deleting news:', err);
-      if (
-        err instanceof Error &&
-        (err.message.includes('Unauthorized') || err.message.includes('認証'))
-      ) {
+      if (err instanceof Error && 
+         (err.message.includes('Unauthorized') || err.message.includes('認証'))) {
         setIsAuthDialogOpen(true);
       } else {
         setError('ニュースの削除に失敗しました。');
@@ -142,6 +113,7 @@ export default function NewsDashboard() {
                 新規作成
               </Button>
             </div>
+            
             <input
               type="text"
               placeholder="検索..."
@@ -149,6 +121,7 @@ export default function NewsDashboard() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 border rounded-md"
             />
+
             {isLoading ? (
               <div className="text-center py-4">読み込み中...</div>
             ) : (
@@ -172,6 +145,7 @@ export default function NewsDashboard() {
               </div>
             )}
           </div>
+
           <div className="bg-white p-6 rounded-lg shadow-md">
             {selectedNews ? (
               <NewsDetail
@@ -199,7 +173,7 @@ export default function NewsDashboard() {
 
         <AuthExpiredDialog
           isOpen={isAuthDialogOpen}
-          onClose={handleAuthDialogClose}
+          onClose={() => setIsAuthDialogOpen(false)}
         />
 
         {error && <ErrorAlert message={error} onClose={() => setError(null)} />}

@@ -1,7 +1,9 @@
 // api.ts
 import { useState, useEffect } from 'react';
 import { TokenManager } from './auth';
-const API_BASE_URL = '/rcms-api/1';
+
+const API_URL = 'https://qiss-nwes.g.kuroco.app';
+const API_BASE_URL = `${API_URL}/rcms-api/1`;
 
 interface ApiError {
   code: string;
@@ -56,33 +58,22 @@ export interface NewsContent {
   m_site_id?: string;
 }
 
-// ヘッダー生成関数
-const getHeaders = (): Headers => {
-  const token = getCookie('grant_token');
-  const host = window.location.host; // 現在のホスト情報を取得
-  const timestamp = Date.now(); // タイムスタンプを追加してキャッシュを防ぐ
-  console.log('Getting headers with token:', token); // デバッグ用
-
-  if (!token) {
+const getHeaders = (): HeadersInit => {
+  const tokenInfo = TokenManager.getToken();
+  if (!tokenInfo || !TokenManager.isTokenValid()) {
     throw new Error('認証が必要です');
   }
 
-  return new Headers({
-    Accept: 'application/json',
+  // デバッグ用
+  console.log('Current token info:', tokenInfo);
+
+  return {
+    'Accept': '*/*',
     'Content-Type': 'application/json',
-    'x-rcms-api-access-token': '',
-    Authorization: `Bearer ${token}`,
-    Host: host, // HOSTヘッダーを追加
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate', // キャッシュを無効化
-    Pragma: 'no-cache', // HTTP/1.0との互換性のため
-    Expires: '0', // 即時期限切れに
-    'If-Modified-Since': '0',
-    'If-None-Match': '',  // ETAGを無効化
-    'X-Cache-Control': 'pass', // カスタムヘッダーでPASSを明示
-    'X-Request-Timestamp': timestamp.toString(), // タイムスタンプを追加
-    'X-Request-ID': crypto.randomUUID(),
-  });
+    'X-RCMS-API-ACCESS-TOKEN': tokenInfo.token, // ヘッダー名を確認
+  };
 };
+
 // Cookieから指定された名前の値を取得するヘルパー関数
 const getCookie = (name: string): string | null => {
   try {
@@ -228,43 +219,104 @@ const handleApiError = (error: unknown) => {
 export const getNewsList = async (): Promise<NewsListResponse> => {
   try {
     console.log('Fetching news list...');
-    const headers = getHeaders();
 
-    // デバッグ用にヘッダーの内容を確認
-    console.log('Request headers:', Object.fromEntries(headers.entries()));
+    // トークンの存在確認
+    const tokenInfo = TokenManager.getToken();
+    if (!tokenInfo || !TokenManager.isTokenValid()) {
+      throw new Error('認証が必要です');
+    }
 
-    const topicsGroupId = [7]; // 配列の値
+    // URLにクエリパラメータを追加
+    const url = new URL(`${API_BASE_URL}/content/list`);
+    url.searchParams.append('topics_group_id[]', '7');
 
-    // クエリパラメータとして配列を文字列に変換
-    const queryParams = new URLSearchParams({
-      topics_group_id: JSON.stringify(topicsGroupId),
-    }).toString();
-    const response = await fetch(`${API_BASE_URL}/content/list`, {
+    console.log('Request URL:', url.toString());
+    console.log('Using token:', tokenInfo.token);
+
+    const headers = new Headers({
+      'Accept': '*/*',
+      'Content-Type': 'application/json',
+      'X-RCMS-API-ACCESS-TOKEN': tokenInfo.token
+    });
+
+    const requestOptions: RequestInit = {
       method: 'GET',
       headers: headers,
       credentials: 'include',
-      cache: 'no-store',
+    };
+
+    // リクエストの詳細をログ出力
+    console.log('Request options:', {
+      method: requestOptions.method,
+      headers: Object.fromEntries(headers.entries()),
+      credentials: requestOptions.credentials
     });
 
-    const responseText = await response.text();
-    console.log('Response body:', responseText);
+    const response = await fetch(url.toString(), requestOptions);
 
-    // デバッグ用にレスポンスの詳細を確認
+    // レスポンスの詳細をログ出力
     console.log('Response status:', response.status);
-    console.log(
-      'Response headers:',
-      Object.fromEntries(response.headers.entries())
-    );
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
-    return handleResponse<NewsListResponse>(response);
+    const responseText = await response.text();
+    console.log('Raw response:', responseText);
+
+    // レスポンスの解析
+    if (!response.ok) {
+      const errorData = responseText ? JSON.parse(responseText) : {};
+      
+      if (response.status === 401 || response.status === 403) {
+        // 認証エラーの場合、トークンをクリアして再ログインを促す
+        TokenManager.clearToken();
+        throw new Error('認証の有効期限が切れました。再度ログインしてください。');
+      }
+
+      throw new Error(
+        errorData.errors?.[0]?.message || 
+        `ニュース取得に失敗しました。Status: ${response.status}`
+      );
+    }
+
+    // 正常なレスポンスの処理
+    const data: NewsListResponse = JSON.parse(responseText);
+    return data;
+
   } catch (error) {
     console.error('Error fetching news:', error);
+    
     if (error instanceof Error && error.message === '認証が必要です') {
-      TokenManager.clearToken(); // 認証エラー時にトークンをクリア
+      TokenManager.clearToken();
     }
+    
     throw error;
   }
 };
+
+// 型定義の修正
+interface NewsListResponse {
+  list: Array<{
+    topics_id: number;
+    subject: string;
+    contents: string;
+    ymd: string;
+    open_date: string;
+    close_date?: string;
+    inst_ymdhi: string;
+    update_ymdhi: string;
+    topics_flg: number;
+    open_flg: number;
+  }>;
+  pageInfo: {
+    totalCnt: number;
+    perPage: number;
+    totalPageCnt: number;
+    pageNo: number;
+  };
+  errors?: Array<{
+    message: string;
+    code: string;
+  }>;
+}
 
 // NewsItemの型定義（Dashboardで使用）
 export interface NewsItem {

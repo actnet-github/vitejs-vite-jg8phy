@@ -46,144 +46,122 @@ const COOKIE_OPTIONS = {
 };
 
 // トークン管理のためのユーティリティクラス
+interface TokenInfo {
+  token: string;
+  expiresAt: number;
+}
+
 export class TokenManager {
   private static readonly TOKEN_KEY = 'grant_token';
   private static readonly TOKEN_EXPIRY_KEY = 'token_expiry';
 
-  // トークンの保存（Cookie と localStorage の両方に保存）
   static saveToken(token: string, expiresSeconds: number): void {
-    const expiresAt = Date.now() + expiresSeconds * 1000;
-
-    // Cookieに保存
-    const expires = new Date(expiresAt).toUTCString();
-    document.cookie = `${
-      this.TOKEN_KEY
-    }=${token}; expires=${expires}; ${Object.entries(COOKIE_OPTIONS)
-      .map(([key, value]) => `${key}=${value}`)
-      .join('; ')}`;
-
-    // LocalStorageにバックアップとして保存
     try {
+      const expiresAt = Date.now() + expiresSeconds * 1000;
+      
+      // Cookieに保存
+      const expires = new Date(expiresAt).toUTCString();
+      document.cookie = `${this.TOKEN_KEY}=${token}; expires=${expires}; path=/`;
+      console.log('Token saved to cookie:', token, 'expires:', expires);
+
+      // LocalStorageにも保存
       localStorage.setItem(this.TOKEN_KEY, token);
       localStorage.setItem(this.TOKEN_EXPIRY_KEY, expiresAt.toString());
+      console.log('Token saved to localStorage', { token, expiresAt });
+
     } catch (error) {
-      console.warn('LocalStorage is not available:', error);
+      console.error('Error saving token:', error);
+      throw new Error('トークンの保存に失敗しました');
     }
   }
 
-  // トークンの取得（Cookie を優先し、失敗時は localStorage をフォールバックとして使用）
   static getToken(): TokenInfo | null {
-    const cookieToken = this.getTokenFromCookie();
-    if (cookieToken) {
-      return cookieToken;
-    }
-
-    return this.getTokenFromLocalStorage();
-  }
-
-  // Cookieからトークンを取得
-  private static getTokenFromCookie(): TokenInfo | null {
     try {
-      const cookies = document.cookie.split(';');
-      const tokenCookie = cookies
-        .map((cookie) => cookie.trim())
-        .find((cookie) => cookie.startsWith(`${this.TOKEN_KEY}=`));
+      // Cookieからトークンを取得
+      const token = this.getTokenFromCookie();
+      console.log('Token from cookie:', token);
 
-      if (!tokenCookie) {
-        return null;
-      }
-
-      const token = tokenCookie.split('=')[1];
       if (!token) {
+        console.log('No token found in cookie');
         return null;
       }
 
-      // Cookie の有効期限を取得
-      const expires = cookies
-        .map((cookie) => cookie.trim())
-        .find((cookie) => cookie.startsWith('expires='));
-
-      const expiresAt = expires
-        ? new Date(expires.split('=')[1]).getTime()
-        : Date.now() + 24 * 60 * 60 * 1000;
-
-      return { token, expiresAt };
-    } catch (error) {
-      console.error('Error reading cookie:', error);
-      return null;
-    }
-  }
-
-  // LocalStorageからトークンを取得
-  private static getTokenFromLocalStorage(): TokenInfo | null {
-    try {
-      const token = localStorage.getItem(this.TOKEN_KEY);
+      // LocalStorageから有効期限を取得
       const expiresAt = localStorage.getItem(this.TOKEN_EXPIRY_KEY);
+      console.log('Expiry from localStorage:', expiresAt);
 
-      if (!token || !expiresAt) {
-        return null;
+      if (!expiresAt) {
+        // 有効期限が見つからない場合は24時間として設定
+        const newExpiresAt = Date.now() + (24 * 60 * 60 * 1000);
+        localStorage.setItem(this.TOKEN_EXPIRY_KEY, newExpiresAt.toString());
+        console.log('Set new expiry:', newExpiresAt);
+        return { token, expiresAt: newExpiresAt };
       }
 
-      const expiryTime = parseInt(expiresAt, 10);
-      if (isNaN(expiryTime) || expiryTime < Date.now()) {
-        this.clearToken();
-        return null;
-      }
+      return {
+        token,
+        expiresAt: parseInt(expiresAt, 10)
+      };
 
-      return { token, expiresAt: expiryTime };
     } catch (error) {
-      console.error('Error reading from localStorage:', error);
+      console.error('Error getting token:', error);
       return null;
     }
   }
 
-  // トークンのクリア
-  static clearToken(): void {
-    try {
-      // Cookie のクリア
-      document.cookie = `${this.TOKEN_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
-      console.log('Cookie cleared');
+  private static getTokenFromCookie(): string | null {
+    const cookies = document.cookie.split(';');
+    const tokenCookie = cookies
+      .map(cookie => cookie.trim())
+      .find(cookie => cookie.startsWith(`${this.TOKEN_KEY}=`));
 
-      // LocalStorage のクリア
-      localStorage.removeItem(this.TOKEN_KEY);
-      localStorage.removeItem(this.TOKEN_EXPIRY_KEY);
-      console.log('LocalStorage cleared');
-
-    } catch (error) {
-      console.warn('Error clearing tokens:', error);
+    if (tokenCookie) {
+      const token = tokenCookie.split('=')[1];
+      console.log('Found token in cookie:', token);
+      return token;
     }
-    // 認証状態の変更を通知
-    notifyAuthStateChange();
+
+    return null;
   }
 
-  // トークンの有効性チェック
   static isTokenValid(): boolean {
-    const tokenInfo = this.getToken();
-    if (!tokenInfo) {
+    try {
+      const tokenInfo = this.getToken();
+      console.log('Checking token validity:', tokenInfo);
+
+      if (!tokenInfo || !tokenInfo.token) {
+        console.log('No token found');
+        return false;
+      }
+
+      const now = Date.now();
+      const isValid = tokenInfo.expiresAt > now;
+
+      console.log('Token validity check:', {
+        now: new Date(now).toISOString(),
+        expiresAt: new Date(tokenInfo.expiresAt).toISOString(),
+        isValid
+      });
+
+      return isValid;
+    } catch (error) {
+      console.error('Error checking token validity:', error);
       return false;
     }
-
-    return tokenInfo.expiresAt > Date.now();
   }
 
-  static clearAllStorages(): void {
-    this.clearToken();
-
-    // セッションストレージをクリア
+  static clearToken(): void {
     try {
-      sessionStorage.clear();
-    } catch (e) {
-      console.warn('Failed to clear sessionStorage:', e);
-    }
-
-    // 追加のストレージをクリア
-    try {
-      // アプリケーション固有の他のストレージをクリア
-      localStorage.removeItem('user_settings');
-      localStorage.removeItem('cached_data');
-      // 必要に応じて他のキーも追加
-    } catch (e) {
-      console.warn('Failed to clear additional storage:', e);
+      // Cookie から削除
+      document.cookie = `${this.TOKEN_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+      
+      // LocalStorage から削除
+      localStorage.removeItem(this.TOKEN_KEY);
+      localStorage.removeItem(this.TOKEN_EXPIRY_KEY);
+      
+      console.log('Token cleared successfully');
+    } catch (error) {
+      console.error('Error clearing token:', error);
     }
   }
 }
@@ -272,6 +250,18 @@ export const login = async (loginId: string, password: string): Promise<void> =>
 
     // 成功レスポンスが期待した形式でない場合
     throw new Error('Invalid response format from server');
+
+    if (data.grant_token) {
+      const expiresSeconds = data.info?.validUntil 
+        ? data.info.validUntil - Math.floor(Date.now() / 1000)
+        : 24 * 60 * 60;
+
+      TokenManager.saveToken(data.grant_token, expiresSeconds);
+      console.log('Login successful, token saved');
+      
+      // 認証状態の変更を通知
+      window.dispatchEvent(new Event('authStateChanged'));
+    }
 
   } catch (error) {
     console.error('Login process failed:', error);

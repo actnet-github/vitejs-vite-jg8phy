@@ -25,6 +25,12 @@ export default defineConfig({
             console.log('proxy error', err);
           });
           proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Cookieをプロキシリクエストに含める
+            const cookies = req.headers.cookie;
+            if (cookies) {
+              proxyReq.setHeader('Cookie', cookies);
+            }
+
             console.log('Sending Request to the Target:', {
               method: proxyReq.method,
               path: proxyReq.path,
@@ -32,6 +38,12 @@ export default defineConfig({
             });
           });
           proxy.on('proxyRes', (proxyRes, req, res) => {
+            // レスポンスCookieを保持
+            const cookies = proxyRes.headers['set-cookie'];
+            if (cookies) {
+              res.setHeader('Set-Cookie', cookies);
+            }
+
             console.log('Received Response from the Target:', {
               statusCode: proxyRes.statusCode,
               headers: proxyRes.headers
@@ -40,19 +52,6 @@ export default defineConfig({
         },
       }
     },
-    cors: {
-      origin: 'https://qiss-nwes.g.kuroco.app',
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: [
-        'Content-Type',
-        'Authorization',
-        'X-Requested-With',
-        'x-rcms-api-access-token',
-        'X-Request-ID',
-        'Origin',
-        'Accept',
-      ],
-    }
+    cors: false  // プロキシ側でCORSを処理
   }
 });
