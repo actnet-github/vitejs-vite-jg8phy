@@ -207,8 +207,8 @@ export const getHeaders = (): Headers => {
 export const login = async (loginId: string, password: string): Promise<void> => {
   const url = `${API_BASE_URL}/login`;
   console.log('Sending login request to:', url);
-  console.log('Sending login request to:', url);
-  console.log('Sending login request to:', url);
+  console.log('Sending login request2 to:', url);
+  console.log('Sending login request3 to:', url);
 
   try {
     const loginData: LoginRequest = {
