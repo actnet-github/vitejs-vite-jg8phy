@@ -345,24 +345,56 @@ export const transformNewsData = (response: NewsListResponse): NewsItem[] => {
   }));
 };
 
-// ニュース作成
-export const createNews = async (data: NewsContent) => {
+interface CreateNewsRequest {
+  subject: string;
+  contents: string;
+  ymd: string;
+  open_date: string;
+  close_date?: string;
+  open_flg: number;
+  topics_flg: number;
+  contents_type: number;
+}
+
+interface CreateNewsResponse {
+  errors: Array<{ message: string; code: string; }>;
+  messages: string[];
+  id: number;
+}
+
+export const createNews = async (data: CreateNewsRequest): Promise<CreateNewsResponse> => {
   try {
     console.log('Creating news with data:', data);
 
     const response = await fetch(`${API_BASE_URL}/content/create`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: {
+        ...getHeaders(),
+        'Accept': '*/*',
+      },
       credentials: 'include',
-      body: JSON.stringify({
-        ...data,
-        topics_group_id: 1,
-      }),
+      body: JSON.stringify(data),
     });
 
-    return handleResponse(response);
+    const responseText = await response.text();
+    console.log('Create response:', responseText);
+
+    if (!response.ok) {
+      const errorResponse = responseText ? JSON.parse(responseText) : null;
+      throw new Error(
+        errorResponse?.errors?.[0]?.message || 
+        `ニュースの作成に失敗しました。Status: ${response.status}`
+      );
+    }
+
+    const responseData: CreateNewsResponse = JSON.parse(responseText);
+    console.log('Creation successful:', responseData.messages[0]);
+
+    return responseData;
+
   } catch (error) {
-    return handleApiError(error);
+    console.error('Error creating news:', error);
+    throw error;
   }
 };
 

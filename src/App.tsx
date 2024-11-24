@@ -5,6 +5,7 @@ import NewsCreatePage from './pages/NewsCreatePage';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
 import NewsEdit from './pages/NewsEdit';
+import NewsCreate from './pages/NewsCreate';
 
 function App() {
   return (
@@ -24,7 +25,7 @@ function App() {
             path="/news/create"
             element={
               <PrivateRoute>
-                <NewsCreatePage />
+                <NewsCreate />
               </PrivateRoute>
             }
           />
