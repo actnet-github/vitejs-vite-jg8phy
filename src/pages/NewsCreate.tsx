@@ -9,10 +9,10 @@ import { createNews } from '../lib/api';
 interface NewsCreateForm {
   subject: string;
   contents: string;
-  ymd: string;
   open_date: string;
   close_date?: string;
   topics_flg: number;
+  open_flg: number;
   contents_type: number;
 }
 
@@ -23,11 +23,10 @@ export default function NewsCreate() {
   const [formData, setFormData] = useState<NewsCreateForm>({
     subject: '',
     contents: '',
-    ymd: new Date().toISOString().split('T')[0],
     open_date: '',
     close_date: '',
-    open_flg: 1,
     topics_flg: 1,
+    open_flg: 1,
     contents_type: 15
   });
 
@@ -38,8 +37,7 @@ export default function NewsCreate() {
       setIsSubmitting(true);
       setError(null);
 
-      const response = await createNews(formData);
-      console.log('News created successfully:', response);
+      await createNews(formData);
       navigate('/news');
     } catch (error) {
       console.error('Error creating news:', error);
@@ -92,19 +90,6 @@ export default function NewsCreate() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    ニュース日付
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.ymd}
-                    onChange={(e) => setFormData({...formData, ymd: e.target.value})}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     公開日
